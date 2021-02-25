@@ -2,20 +2,22 @@ from sys import argv
 from os import system, path, walk
 from math import ceil
 from multiprocessing import Pool, cpu_count
+from distutils.util import strtobool
 
 # default vals
 targetFrameRate=30
 basePath=''
+symlinks=False
 # this is all if we're running this straight from the command line.
 # Should be pretty easily adaptable if we're using this as a module inside another program.
-# possible arguments -- filepath, startframe, stopframe, targetrate
+# possible arguments -- input_path, startframe, stopframe, targetrate
 # input with format "{arg}=val"
 if len(argv) > 1:
-    argsList = ['filepath', 'startframe', 'stopframe', 'targetrate']
+    argsList = ['input_path', 'startframe', 'stopframe', 'targetrate', 'symlinks']
     for arg in argv[1:]:
         arg = arg.split('=')
         if arg[0] in argsList:
-            if arg[0] == 'filepath':
+            if arg[0] == 'input_path':
                 basePath=arg[1]
             elif arg[0] == 'startframe':
                 start=int(arg[1])
@@ -23,6 +25,8 @@ if len(argv) > 1:
                 stop=int(arg[1])
             elif arg[0] == 'targetrate':
                 targetFrameRate=int(arg[1])
+            elif arg[0] == 'symlinks':
+                symlinks=bool(strtobool(arg[1]))
         else:
             print('Error: only permitted keywords are', end='')
             [print('"' + st + '"', end=', ') for st in argsList[:-1]]
@@ -40,12 +44,12 @@ def findTiffs(path):
     return validNames,validNumbers,root
 
 def prevMPwrapper(args):
-    previewer(filepath=args[0], targetrate=args[1])
+    previewer(input_path=args[0], targetrate=args[1])
 
 # by default this will just crank out a preview for every found folder of images in the given folder, so we're only gonna want to do this once!
 foundPaths = []
 tiffExt = ['tif','tiff','TIF','TIFF']
-for root, dirs, files in walk(basePath):
+for root, dirs, files in walk(basePath, followlinks=symlinks):
     print("scanning", root, "for tifs..                                                       ", end='\r')
     if len(files) == 0:
         continue
@@ -69,15 +73,8 @@ for root, dirs, files in walk(basePath):
 #    foundPaths = f.readlines()
 foundPaths = [pth.split('\n')[0] for pth in foundPaths]
 
-args = [(path,targetFrameRate) for path in foundPaths]
-# this should be a comfortable enough paralellism since ffmpeg multithreads anyway
-numProcs = ceil(cpu_count()/2)
-if __name__ == '__main__':
-    with Pool(numProcs) as p:
-        p.map(prevMPwrapper, args)
-
-def previewer(filepath='', **kwargs):
-    basePath = filepath
+def previewer(input_path='', **kwargs):
+    basePath = input_path
     start = None
     end = None
     targetFrameRate = 30
@@ -89,7 +86,7 @@ def previewer(filepath='', **kwargs):
         elif key == 'targetrate':
             targetFrameRate = value
         else:
-            print('previewer: Incorrect argument found! Possible keywords are "filepath", "start", "end", and "targetrate".  Exiting..')
+            print('previewer: Incorrect argument found! Possible keywords are "input_path", "start", "end", and "targetrate".  Exiting..')
             return None
     
     # create the output directory if it doesn't yet exist (eventually this should probably raise a warning if it's already there)
@@ -148,3 +145,12 @@ def previewer(filepath='', **kwargs):
 
     system("ffmpeg -f concat -probesize 200M -i " + path.join(OPdir,"frameList.txt") + " -vsync vfr " + path.join(OPdir,OPname))
     [system("rm " + path.join(OPdir,pth)) for pth in imgStrs]
+
+
+args = [(path,targetFrameRate) for path in foundPaths]
+# this should be a comfortable enough paralellism since ffmpeg multithreads anyway
+numProcs = ceil(cpu_count()/2)
+if __name__ == '__main__':
+    with Pool(numProcs) as p:
+        p.map(prevMPwrapper, args)
+
