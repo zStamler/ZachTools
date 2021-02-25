@@ -1,0 +1,40 @@
+### Previewer will, by default, recursively browse every subfolder in the directory given it for argument "input_path". There may be times when it is not desired to crawl every single folder. For example it may be necessary to generate previews for some set of new acquisitions that are in the same folder as old ones that already have previews. It might also be desired to compress certain subsets of multiple folders, for example to generate previews for several days' worth of data from folders for CAM1, CAM2 and CAM3. The general procedure is to create a directory full of soft links, and then run Previewer on that directory, enabling the "symlinks" option. ###
+
+# STEP 1 #
+# Create a directory somewhere to contain your symlinks, then navigate to that directory
+
+mkdir </path/to/links/dir>
+cd </path/to/links/dir>
+
+# STEP 1.5 (If generating previews for all three cameras) #
+# Create subdirectories for cams 1,2,3
+
+mkdir ./CAM{1..3}
+
+
+# STEP 2 #
+# Create symlinks to desired acquisitions folders in the appropriate location. Several examples follow:
+# EXAMPLE 1: Create symlinks for all dates from February 2021. Assume we are in the directory where the links are to be created.
+
+ln -s </path/to/dir/containing/acquisitions>/202102* ./
+
+# EXAMPLE 2: Create symlinks for one acquisition date across all three cameras. Assume we are in the directory where the links are to be created, containing subfolders for CAM1, CAM2, CAM3.
+
+ln -s </path/to/dir/with/CAMX/folders>/CAM1/<folder_containing_acquisitions> ./CAM1
+ln -s </path/to/dir/with/CAMX/folders>/CAM2/<folder_containing_acquisitions> ./CAM2
+ln -s </path/to/dir/with/CAMX/folders>/CAM3/<folder_containing_acquisitions> ./CAM3
+
+
+# STEP 3 #
+# Run the previewer script. 
+# By default the script will generate a preview of the entire TIFF sequence, using a target frame rate of 30fps, meaning the preview will include every 5 or 6 frames of each acquisition. Unless you need to specify a different target frame rate or range of images to use, do not worry about OPTIONS.
+# NOTE: The script will appear to run and do nothing unless the "symlinks=True" option is included.
+
+python Previewer.py input_path=</path/to/links/dir> output_path=</path/to/OP/dir> symlinks=True [OPTIONS]
+
+# STEP 4 #
+# Delete the temporary symlink directory
+
+rm -r </path/to/links/dir>
+
+

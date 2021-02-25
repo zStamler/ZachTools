@@ -3,6 +3,7 @@ from os import system, path, walk
 from math import ceil
 from multiprocessing import Pool, cpu_count
 from distutils.util import strtobool
+import pickle
 
 # default vals
 targetFrameRate=30
@@ -13,12 +14,14 @@ symlinks=False
 # possible arguments -- input_path, startframe, stopframe, targetrate
 # input with format "{arg}=val"
 if len(argv) > 1:
-    argsList = ['input_path', 'startframe', 'stopframe', 'targetrate', 'symlinks']
+    argsList = ['input_path', 'output_path', 'startframe', 'stopframe', 'targetrate', 'symlinks']
     for arg in argv[1:]:
         arg = arg.split('=')
         if arg[0] in argsList:
             if arg[0] == 'input_path':
                 basePath=arg[1]
+            elif arg[0] == 'output_path':
+                basePath_OP=arg[1]
             elif arg[0] == 'startframe':
                 start=int(arg[1])
             elif arg[0] == 'stopframe':
@@ -44,36 +47,48 @@ def findTiffs(path):
     return validNames,validNumbers,root
 
 def prevMPwrapper(args):
-    previewer(input_path=args[0], targetrate=args[1])
+    previewer(input_path=args[0], output_path=args[1], targetrate=args[2])
 
 # by default this will just crank out a preview for every found folder of images in the given folder, so we're only gonna want to do this once!
 foundPaths = []
+try:
+    print('Generating previews from base folder ' + basePath + ' to reside in output folder ' + basePath_OP)
+except:
+    print('Must specify input and output paths')
+    exit()
 tiffExt = ['tif','tiff','TIF','TIFF']
-for root, dirs, files in walk(basePath, followlinks=symlinks):
-    print("scanning", root, "for tifs..                                                       ", end='\r')
-    if len(files) == 0:
-        continue
-    done = False
-    for ext in tiffExt:
-        for f in files:
-#            print(f)
-            if ext in f:
-                done = True
-#                print("                                                                         ", end='\r')
+if True: # should usually be True, False for debugging only
+    for root, dirs, files in walk(basePath, followlinks=symlinks):
+        print("scanning", root, "for tifs..                                                       ", end='\r')
+        if len(files) == 0:
+            continue
+        done = False
+        for ext in tiffExt:
+            for f in files:
+    #            print(f)
+                if ext in f:
+                    done = True
+    #                print("                                                                         ", end='\r')
+                    break
+            if done:
                 break
         if done:
-            break
-    if done:
-        foundPaths.append(root)
-        continue
-#with open(path.join(basePath,'imgDirs.txt'), 'w') as f:
-#    for pth in foundPaths:
-#        f.write('%s\n' % pth)
-#with open(path.join(basePath,'imgDirs.txt'), 'r') as f:
-#    foundPaths = f.readlines()
-foundPaths = [pth.split('\n')[0] for pth in foundPaths]
+            foundPaths.append(root)
+            continue
+    OPpaths = [pth.split('/')[-3:] for pth in foundPaths]
+    OPpaths = [path.join(basePath_OP,pth[1],pth[0] + '_' + pth[1] + '_' + pth[2] + '.mp4') for pth in OPpaths]
+    [system("mkdir " + path.join(basePath_OP,"CAM" + str(ii))) for ii in range(1,4)]
+    #exit()
+    foundPaths = [pth.split('\n')[0] for pth in foundPaths]
+else:
+    if False:
+        pickle.dump((OPpaths,foundPaths),open('dev.p', 'wb'))
+        exit()
+    else:
+        (OPpaths,foundPaths) = pickle.load(open('dev.p','rb'))
+#
 
-def previewer(input_path='', **kwargs):
+def previewer(input_path='', output_path='', **kwargs):
     basePath = input_path
     start = None
     end = None
@@ -89,29 +104,8 @@ def previewer(input_path='', **kwargs):
             print('previewer: Incorrect argument found! Possible keywords are "input_path", "start", "end", and "targetrate".  Exiting..')
             return None
     
-    # create the output directory if it doesn't yet exist (eventually this should probably raise a warning if it's already there)
-    # NOTE: if we want this to work on Windows we need to create this folder through OS instead of using a system call
-    OPdir = path.join(basePath,"PREVIEW")
-    OPname = ''
-    while True:
-        OPname = path.split(path.split(basePath)[0])
-        if OPname[-1] != '':
-            OPname = OPname[-1]
-            break
-    try:
-        system("mkdir " + OPdir)
-    except FileError:
-        nop=True
-
-    # get the list of filenames
     # relies on file extension
     validNames, validNumbers, _ = findTiffs(basePath)
-#    tiffExt = ['tif','tiff','TIF','TIFF']
-#    for root, dirs, files in walk(basePath):
-#        fileNameModules = [name.split('.') for name in files]
-#        validNames = [name for name,mod in zip(files,fileNameModules) if mod[-1] in tiffExt]
-#        validNumbers = [int(mod.split('_')[-1].split('.')[0]) for mod in validNames]
-#        break # I think we can get away with this, as long as the walk() method iterates in a a consistent order
     prefix = validNames[0].split('_')[0] + '_'
     suffix = '.' + validNames[0].split('.')[-1]
     try:
@@ -122,7 +116,10 @@ def previewer(input_path='', **kwargs):
         end = min(max(validNumbers),end)
     except (TypeError,NameError) as NoEndError:
         end = max(validNumbers)
-    OPname = OPname + '_fr_' + str(start) + '-' + str(end) + '.mp4'
+    OPname = output_path.split('/')[-1]
+    OPdir = '/' + path.join(*output_path.split('/')[:-1])
+    lndir = path.join(OPdir,OPname.split('.')[0])
+    system('mkdir ' + lndir)
 
     def imgStr(prefix,num,suffix):
         return prefix + "{:06d}".format(num) + suffix
@@ -135,19 +132,20 @@ def previewer(input_path='', **kwargs):
     frameList = [num for num in range(start,end,skipFrames)]
     imgStrs = [imgStr(prefix,num,suffix) for num in frameList]
     # create symlinks for all the images in series
-    [system("ln -s " + path.join(basePath,pth) + " " + path.join(OPdir,pth)) for pth in imgStrs]
+    [system("ln -s " + path.join(basePath,pth) + " " + path.join(lndir,pth)) for pth in imgStrs]
     # write the list of files to be encoded
-    with open(path.join(OPdir,'frameList.txt'), 'w') as f:
+    
+    with open(path.join(lndir,'frameList.txt'), 'w') as f:
         for pth in imgStrs:
             f.write('file %s\n' % pth)
             f.write('duration ' + str(1/fRate) + '\n')
         f.write('file %s\n' % imgStrs[-1]) # this has to be here for some reason, per the ffmpeg documentation
+    system("ffmpeg -f concat -probesize 200M -i " + path.join(lndir,"frameList.txt") + " -vsync vfr " + path.join(OPdir,OPname))
+    system('rm -r ' + lndir)
 
-    system("ffmpeg -f concat -probesize 200M -i " + path.join(OPdir,"frameList.txt") + " -vsync vfr " + path.join(OPdir,OPname))
-    [system("rm " + path.join(OPdir,pth)) for pth in imgStrs]
 
+args = [(IPpath,OPpath,targetFrameRate) for IPpath,OPpath in zip(foundPaths,OPpaths)]
 
-args = [(path,targetFrameRate) for path in foundPaths]
 # this should be a comfortable enough paralellism since ffmpeg multithreads anyway
 numProcs = ceil(cpu_count()/2)
 if __name__ == '__main__':
