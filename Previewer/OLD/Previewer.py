@@ -6,16 +6,15 @@ from distutils.util import strtobool
 import pickle
 
 # default vals
-targetFrameRate=31
+targetFrameRate=30
 basePath=''
 symlinks=False
-camFolder=None
 # this is all if we're running this straight from the command line.
 # Should be pretty easily adaptable if we're using this as a module inside another program.
 # possible arguments -- input_path, startframe, stopframe, targetrate
 # input with format "{arg}=val"
 if len(argv) > 1:
-    argsList = ['input_path', 'output_path', 'startframe', 'stopframe', 'targetrate', 'symlinks', 'cam_folder']
+    argsList = ['input_path', 'output_path', 'startframe', 'stopframe', 'targetrate', 'symlinks']
     for arg in argv[1:]:
         arg = arg.split('=')
         if arg[0] in argsList:
@@ -31,8 +30,6 @@ if len(argv) > 1:
                 targetFrameRate=int(arg[1])
             elif arg[0] == 'symlinks':
                 symlinks=bool(strtobool(arg[1]))
-            elif arg[0] == 'cam_folder':
-                camFolder=int(arg[1])
         else:
             print('Error: only permitted keywords are', end='')
             [print('"' + st + '"', end=', ') for st in argsList[:-1]]
@@ -78,21 +75,9 @@ if True: # should usually be True, False for debugging only
         if done:
             foundPaths.append(root)
             continue
-    if camFolder is None:
-        cf = ''
-    else:
-        cf = "Cam" + str(camFolder)
     OPpaths = [pth.split('/')[-3:] for pth in foundPaths]
-    OPpaths = [path.join(basePath_OP,cf,pth[2] + '.mp4') for pth in OPpaths]
-#    print('')
-#    print('')
-#    print(basePath_OP, end='\n\n')
-#    print(*OPpaths, sep='\n')
-#    exit()
-    if camFolder is None:
-        [system("mkdir " + path.join(basePath_OP,"CAM" + str(ii))) for ii in range(1,4)]
-    else:
-        system("mkdir " + path.join(basePath_OP, cf))
+    OPpaths = [path.join(basePath_OP,pth[1],pth[0] + '_' + pth[1] + '_' + pth[2] + '.mp4') for pth in OPpaths]
+    [system("mkdir " + path.join(basePath_OP,"CAM" + str(ii))) for ii in range(1,4)]
     #exit()
     foundPaths = [pth.split('\n')[0] for pth in foundPaths]
 else:
